@@ -186,11 +186,36 @@ bookingForm.addEventListener('submit', (e) => {
         return;
     }
 
-    // Simulate form submission
-    alert('Thank you for your inquiry! We will contact you within 24 hours.');
+    const submitBtn = bookingForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn ? submitBtn.textContent : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Sending...';
+    }
 
-    // Reset form
-    bookingForm.reset();
+    fetch('/send-inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone, email, eventType, eventDate, message })
+    })
+        .then(async (response) => {
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.ok) {
+                const errorMsg = data.error || 'Unable to send your inquiry right now.';
+                throw new Error(errorMsg);
+            }
+            alert('Thank you for your inquiry! We will contact you within 24 hours.');
+            bookingForm.reset();
+        })
+        .catch((err) => {
+            alert(err.message || 'Unable to send your inquiry right now.');
+        })
+        .finally(() => {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
 });
 
 // Smooth Scrolling for Anchor Links
