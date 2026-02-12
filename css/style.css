@@ -256,10 +256,6 @@ img {
     transition: background 0.45s ease, opacity 0.45s ease;
 }
 
-.hero:hover .hero-overlay {
-    background: linear-gradient(120deg, rgba(10, 20, 38, 0.64), rgba(31, 122, 140, 0.52));
-}
-
 .hero::before,
 .hero::after {
     content: '';
