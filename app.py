@@ -3,9 +3,27 @@ from email.message import EmailMessage
 import os
 import smtplib
 import ssl
+from pathlib import Path
+from urllib.parse import quote
 
 
 app = Flask(__name__, template_folder=".", static_folder=None)
+
+GALLERY_FOLDER_MAP = {
+    "balloon": "balloon",
+    "bridal-garland": "bridal Garland",
+    "bridal-jada": "Bridal Jada",
+    "bridal-groom-making-ceremonies": "Bridal_Groom_Making_Ceremonies",
+    "door-decoration": "door_decoration",
+    "haldi": "haldi",
+    "mandaps": "mandaps",
+    "reception-stages": "reception_stages",
+}
+
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+DEFAULT_INQUIRY_RECIPIENTS = [
+    "abdulkhaleeqkhale29@gmail.com",
+]
 
 
 @app.route("/")
@@ -28,6 +46,34 @@ def images(filename):
     return send_from_directory("images", filename)
 
 
+@app.route("/api/gallery-images")
+def gallery_images():
+    image_root = Path(app.root_path) / "images"
+    items = []
+
+    for category, folder_name in GALLERY_FOLDER_MAP.items():
+        folder_path = image_root / folder_name
+        if not folder_path.exists():
+            continue
+
+        image_paths = sorted(
+            [path for path in folder_path.rglob("*") if path.suffix.lower() in ALLOWED_IMAGE_EXTENSIONS],
+            key=lambda path: path.name.lower(),
+        )
+
+        for path in image_paths:
+            relative_path = path.relative_to(image_root).as_posix()
+            items.append(
+                {
+                    "src": f"/images/{quote(relative_path, safe='/')}",
+                    "category": category,
+                    "alt": path.stem.replace("_", " ").strip(),
+                }
+            )
+
+    return jsonify({"items": items}), 200
+
+
 @app.route("/send-inquiry", methods=["POST"])
 def send_inquiry():
     data = request.get_json(silent=True) or request.form
@@ -46,16 +92,23 @@ def send_inquiry():
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASS")
-    to_email = os.getenv("TO_EMAIL")
+    to_email_raw = os.getenv("TO_EMAIL", "")
+    to_emails = [
+        item.strip()
+        for item in to_email_raw.replace(";", ",").split(",")
+        if item.strip()
+    ]
+    if not to_emails:
+        to_emails = DEFAULT_INQUIRY_RECIPIENTS.copy()
     from_email = os.getenv("FROM_EMAIL") or smtp_user
 
-    if not all([smtp_host, smtp_user, smtp_pass, to_email, from_email]):
+    if not all([smtp_host, smtp_user, smtp_pass, from_email]):
         return jsonify({"ok": False, "error": "Email server is not configured."}), 500
 
     msg = EmailMessage()
     msg["Subject"] = f"New Event Inquiry - {event_type}"
     msg["From"] = from_email
-    msg["To"] = to_email
+    msg["To"] = ", ".join(to_emails)
     msg["Reply-To"] = email
     msg.set_content(
         "\n".join(
